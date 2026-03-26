@@ -6,7 +6,7 @@
 |------|------------|--------------|
 | 1 | Place VFR images | `dataset/Shanghai-train/image_tiles` |
 | 2 | Place coarse labels | `dataset/Shanghai-train/label_tiles` |
-| 3 | Notes | - The repository includes the **UBGG-3 m dataset** as coarse labels.<br>- Additional VFR images can be obtained via **Bing Maps**, **Google Earth**, or **ESRI World Imagery** APIs or platforms. |
+| 3 | Notes | - The **UBGG-3 m** coarse labels can be downloaded [here](https://drive.google.com/file/d/12JRQE4NMvyj1_Wr_Lln9KSIYSeZoxLpZ/view?usp=drive_link).<br>- VFR images can be obtained via **Bing Maps**, **Google Earth**, or **ESRI World Imagery** APIs or platforms. |
 
 > 💡 Tip: Keep the folder structure consistent with the example above to avoid path errors during registration and training.
 >
