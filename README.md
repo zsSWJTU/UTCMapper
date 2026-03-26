@@ -1,4 +1,4 @@
-# UTCMapper for 0.3 m urban tree canopy mapping
+# UTCMapper for 0.3 m urban tree canopy mapping: a case study in Shanghai
 
 ## 1️⃣ Data Preparation
 
