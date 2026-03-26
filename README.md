@@ -48,7 +48,7 @@ commands/Shanghai-center-train_PSD_2026-03-26.bat
 |------|----------------|
 | 1 | Prepare test dataset (same as training steps 1–2) |
 | 2 | Run test script ( ```python test.py --dataset {your_dataset_name} --model_path {trained_model.pth} --save_path {prediction_output_folder} ```) |
-## 5️⃣ Quick Reference
+## 🔔 Quick Reference
 | Task | Command / Path |
 |------|----------------|
 | Generate CSV list | `python generate_dataset_csv.py ...` |
