@@ -56,7 +56,7 @@ commands/Shanghai-train_PSD_2026-03-26.bat
 | Run training | `commands/{dataset}_PSD_{date}.bat` |
 | Test model | `python test.py --dataset ... --model_path ... --save_path ...` |
 
-## 🔗 Download Produced Shanghai 0.3 m UTC Map
+## 🔗 Download the Produced Shanghai 0.3 m UTC Map
 
 You can directly download the produced urban tree canopy (UTC) map for Shanghai (0.3 m resolution) here:
 
