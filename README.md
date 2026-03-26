@@ -4,8 +4,8 @@
 
 | Step | Description | Path Example |
 |------|------------|--------------|
-| 1 | Place VFR images | `dataset/Shanghai-train/image_tiles` |
-| 2 | Place coarse labels | `dataset/Shanghai-train/label_tiles` |
+| 1 | Place VFR images | `dataset/Shanghai-center-train/image_tiles` |
+| 2 | Place coarse labels | `dataset/Shanghai-center-train/label_tiles` |
 | 3 | Notes | - The **UBGG-3 m** coarse labels can be downloaded [here](https://drive.google.com/file/d/12JRQE4NMvyj1_Wr_Lln9KSIYSeZoxLpZ/view?usp=drive_link).<br>- VFR images can be obtained via **Bing Maps**, **Google Earth**, or **ESRI World Imagery** APIs or platforms. |
 
 > 💡 Tip: Keep the folder structure consistent with the example above to avoid path errors during registration and training.
@@ -15,16 +15,16 @@
 
 ```bash
 python generate_dataset_csv.py \
-    --image_folder 'dataset/Shanghai-train/image_tiles' \
-    --label_folder 'dataset/Shanghai-train/label_tiles' \
-    --new_file_path 'dataset/CSV_list/Shanghai-train.csv'
+    --image_folder 'dataset/Shanghai-center-train/image_tiles' \
+    --label_folder 'dataset/Shanghai-center-train/label_tiles' \
+    --new_file_path 'dataset/CSV_list/Shanghai-center-train.csv'
 ```
 ### b. Register Dataset in utils.dataset_config
 
 ```python
 'Shanghai-train': {  # default dataset example
-    'list_dir': 'dataset/CSV_list/Shanghai-train',  # path to *.csv
-    'image_dir': 'dataset/Shanghai-train/image_tiles',
+    'list_dir': 'dataset/CSV_list/Shanghai-center-train',  # path to *.csv
+    'image_dir': 'dataset/Shanghai-center-train/image_tiles',
     'num_classes': 2
 }
 ```
@@ -40,7 +40,7 @@ Optional: specify cycles and epochs.
 ### b. Run Training
 Execute the generated command file, e.g.:
 ```bash
-commands/Shanghai-train_PSD_2026-03-26.bat
+commands/Shanghai-center-train_PSD_2026-03-26.bat
 ```
 ---
 ## **4️⃣ Model Testing**
