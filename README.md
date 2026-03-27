@@ -16,7 +16,7 @@
 ```bash
 python generate_dataset_csv.py \
     --image_folder 'dataset/Shanghai-center-train/image_tiles' \
-    --label_folder 'dataset/Shanghai-center-train/label_tiles' \
+    --label_folder 'dataset/Shanghai-center-train/label_tiles' \ #optional
     --new_file_path 'dataset/CSV_list/Shanghai-center-train.csv'
 ```
 ### b. Register Dataset in utils.dataset_config
