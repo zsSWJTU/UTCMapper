@@ -11,7 +11,7 @@ Key components:
     3. CCGLoss: Combines both losses using confidence-guided masking.
 
 Author: Shuang Zhang
-License: Apache-2.0
+License: MIT
 """
 import torch
 import torch.nn as nn
