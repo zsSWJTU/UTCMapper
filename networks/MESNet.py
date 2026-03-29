@@ -349,6 +349,5 @@ def freeze_layers(model, keywords):
 
 if __name__ == '__main__':
     net = MESNet(64, image_band=3)
-    # net.load_state_dict(torch.load(r"J:\UTCMapping\pretrained\SH_epoch_49.pth"))
     for name, param in net.named_parameters():
         print(f"{name}: {param.shape}")
