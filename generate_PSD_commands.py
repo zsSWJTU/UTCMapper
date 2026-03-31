@@ -6,7 +6,7 @@ Each cycle:
     1. Trains the model using the current labels (initially coarse labels).
     2. Uses the trained model to predict and update labels for the next cycle.
     3. Generates training, testing, and dataset CSV commands for each cycle.
-It outputs Linux (.txt) and Windows (.bat) command files.
+It outputs Linux (.sh) and Windows (.bat) command files.
 """
 
 import os
@@ -39,6 +39,7 @@ def generate_commands(cycle=1, total_cycles=1, dataset='Shanghai-train',
     # Add --last_model if provided (not first cycle)
     last_model_arg = f" --last_model {last_model}" if last_model else ""
 
+    # Training command
     train_command = (
         f"python train.py --dataset {dataset} "
         f"--batch_size {batch_size} --max_epochs {max_epochs} "
@@ -56,6 +57,7 @@ def generate_commands(cycle=1, total_cycles=1, dataset='Shanghai-train',
         f"--model_path {model_path} --save_path {save_path} --length {length}"
     )
 
+    # CSV command only if not the last cycle
     if cycle < total_cycles:
         csv_command = (
             f"python generate_dataset_csv.py --image_folder {image_folder} "
@@ -77,9 +79,11 @@ def generate_psd_commands(total_cycles=2, total_epochs=100, dataset='Shanghai-tr
     command_list = []
     each_cycle_epoch = total_epochs // total_cycles
 
-    txt_file = os.path.join(foot_dir, f'{dataset}_PSD_{day}.txt')
-    bat_file = txt_file.replace('.txt', '.bat')
-    create_folder_if_not_exists(txt_file)
+    # Linux shell script
+    sh_file = os.path.join(foot_dir, f'{dataset}_PSD_{day}.sh')
+    # Windows bat file
+    bat_file = sh_file.replace('.sh', '.bat')
+    create_folder_if_not_exists(sh_file)
 
     last_model_path = None
     last_list_path = None
@@ -98,12 +102,14 @@ def generate_psd_commands(total_cycles=2, total_epochs=100, dataset='Shanghai-tr
         )
         command_list.extend(commands)
 
-    # Write to txt (Linux) and bat (Windows)
-    with open(txt_file, 'w') as f:
+    # Write Linux .sh file
+    with open(sh_file, 'w') as f:
+        f.write('#!/bin/bash\n\n')
         for cmd in command_list:
             if isinstance(cmd, str):
                 f.write(cmd + '\n')
 
+    # Write Windows .bat file
     with open(bat_file, 'w') as f:
         f.write('@echo off\n')
         for cmd in command_list:
@@ -111,7 +117,7 @@ def generate_psd_commands(total_cycles=2, total_epochs=100, dataset='Shanghai-tr
                 f.write(cmd + '\n')
 
     print(f"Run commands in Windows: {bat_file}")
-    print(f"Run commands in Linux: {txt_file}")
+    print(f"Run commands in Linux: {sh_file}")
     return command_list
 
 
