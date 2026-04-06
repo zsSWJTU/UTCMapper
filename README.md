@@ -60,5 +60,5 @@ commands/Shanghai-center-train_PSD_2026-03-26.bat
 
 You can directly download the produced urban tree canopy (UTC) map for Shanghai (0.3 m resolution) here:
 
-[Download Shanghai 0.3 m UTC Map](https://docs.google.com/document/d/1G9H-kiI9dkKoHpC5NdchlrnKs-sL5T-Au5kQkbBoK9s/edit?usp=drive_link)
+[Download Shanghai 0.3 m UTC Map]([https://drive.google.com/file/d/1Pc7_uzVnGNxQtrPNVzqSwzsj_n7SquSu/view?usp=drive_link]）
 
