@@ -58,7 +58,7 @@ commands/Shanghai-center-train_PSD_2026-03-26.bat
 
 ## 🔗 Download the Produced Shanghai 0.3 m UTC Map
 
-You can directly download the produced urban tree canopy (UTC) map for Shanghai (0.3 m resolution) here:
+You can directly download the produced urban tree canopy (UTC) map for Shanghai (0.3 m resolution) here (https://zenodo.org/records/19445966):
 
-[Download Shanghai 0.3 m UTC Map: https://zenodo.org/records/19445966](https://zenodo.org/records/19445966)
+[Download Shanghai 0.3 m UTC Map](https://zenodo.org/records/19445966)
 
