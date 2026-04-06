@@ -1,4 +1,5 @@
 # UTCMapper for 0.3 m urban tree canopy mapping: a case study in Shanghai
+(The produced map link: https://zenodo.org/records/19445966)
 
 ## 1️⃣ Data Preparation
 
