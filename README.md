@@ -1,5 +1,4 @@
-# UTCMapper for 0.3 m urban tree canopy mapping: a case study in Shanghai
-(The produced map link: https://zenodo.org/records/19445966)
+# UTCMapper for 0.3 m urban tree canopy mapping: a case study in Shanghai  
 
 ## 1️⃣ Data Preparation
 
@@ -62,4 +61,19 @@ commands/Shanghai-center-train_PSD_2026-03-26.bat
 You can directly download the produced urban tree canopy (UTC) map for Shanghai (0.3 m resolution) here:
 
 [Download Shanghai 0.3 m UTC Map](https://zenodo.org/records/19445966)
+
+## 📄 Citation
+
+If you use this work, please cite:
+
+```bibtex
+@article{zhang2026utcmapper,
+  title={UTCMapper for 0.3 m urban tree canopy mapping: A case study in Shanghai},
+  author={Zhang, Shuang and Wang, Qian and Yang, Qian and Tong, Xiaohua and Atkinson, Peter M.},
+  journal={Remote Sensing of Environment},
+  volume={340},
+  pages={115435},
+  year={2026},
+  doi={10.1016/j.rse.2026.115435}
+}
 
