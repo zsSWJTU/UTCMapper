@@ -185,8 +185,7 @@ from filenames, outputs can be separated into city subfolders.
 
 ## Progressive Self-Distillation Commands
 
-`generate_PSD_commands.py` no longer contains private paths. Import it and pass
-all paths explicitly:
+Import it and pass all paths explicitly:
 
 ```python
 from generate_PSD_commands import generate_psd_commands
