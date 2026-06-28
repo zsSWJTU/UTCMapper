@@ -1,0 +1,9 @@
+albumentations
+numpy
+pandas
+PyYAML
+rasterio
+tensorboardX
+torch
+torchvision
+tqdm

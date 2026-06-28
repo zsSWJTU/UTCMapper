@@ -1,132 +1,188 @@
 """
-PSD Command Generator
+Generate commands for Progressive Self-Distillation (PSD).
 
-This script implements the Progressive Self-Distillation (PSD) strategy for multi-cycle training and prediction.
-Each cycle:
-    1. Trains the model using the current labels (initially coarse labels).
-    2. Uses the trained model to predict and update labels for the next cycle.
-    3. Generates training, testing, and dataset CSV commands for each cycle.
-It outputs Linux (.sh) and Windows (.bat) command files.
+The script is path-free by default: provide config, CSV, image, and output
+locations when calling ``generate_psd_commands``. Only the public release
+dataset names ``Shanghai-center-train`` and ``Shanghai-center-test`` are
+accepted.
 """
 
-import os
 import datetime
-from utils import dataset_config
+import os
 
-dataset_info = dataset_config
+
+TRAIN_DATASET = "Shanghai-center-train"
+TEST_DATASET = "Shanghai-center-test"
+ALLOWED_DATASETS = {TRAIN_DATASET, TEST_DATASET}
 
 
 def create_folder_if_not_exists(path):
-    """Ensure the parent directory of a path exists."""
+    """Create the parent folder for an output command file."""
     directory = os.path.dirname(path)
-    if not os.path.exists(directory):
+    if directory and not os.path.exists(directory):
         os.makedirs(directory)
 
 
-def generate_commands(cycle=1, total_cycles=1, dataset='Shanghai-train',
-                      batch_size=1, max_epochs=50, length=5, lr=0.01,
-                      total_epochs=100, last_model=None):
-    """
-    Generate commands for a single PSD cycle.
-    last_model: path to previous cycle's model (None for first cycle)
-    """
-    day = datetime.datetime.now().strftime('%Y-%m-%d')
-    work_dir = f'work_dirs/{dataset}_cycle{cycle}_{day}' if total_cycles > 1 else f'work_dirs/{dataset}_{day}'
-    model_path = os.path.join(work_dir, f'epoch_{max_epochs - 1}.pth')  # last epoch model
-    image_folder = dataset_info[dataset]['image_dir']
-    new_file_path = os.path.join(work_dir, 'list.csv')
+def _validate_dataset(dataset):
+    """Reject internal or unsupported dataset names."""
+    if dataset not in ALLOWED_DATASETS:
+        raise ValueError(
+            f"Unsupported dataset: {dataset}. "
+            f"Expected one of: {sorted(ALLOWED_DATASETS)}"
+        )
 
-    # Add --last_model if provided (not first cycle)
-    last_model_arg = f" --last_model {last_model}" if last_model else ""
 
-    # Training command
+def _quote(value):
+    """Quote command values so paths with spaces remain valid."""
+    return f'"{value}"'
+
+
+def generate_commands(
+    cycle=1,
+    total_cycles=1,
+    dataset=TRAIN_DATASET,
+    config_path=None,
+    train_list_path=None,
+    test_list_path=None,
+    image_folder=None,
+    work_root=None,
+    prediction_root=None,
+    last_model=None,
+):
+    """
+    Generate train, inference, and optional CSV-refresh commands for one cycle.
+
+    Parameters are intentionally explicit so this file does not contain private
+    or machine-specific paths.
+    """
+    _validate_dataset(dataset)
+
+    required = {
+        "config_path": config_path,
+        "train_list_path": train_list_path,
+        "test_list_path": test_list_path,
+        "image_folder": image_folder,
+        "work_root": work_root,
+        "prediction_root": prediction_root,
+    }
+    missing = [name for name, value in required.items() if not value]
+    if missing:
+        raise ValueError(f"Missing required PSD arguments: {missing}")
+
+    day = datetime.datetime.now().strftime("%Y-%m-%d")
+    run_name = (
+        f"{dataset}_cycle{cycle}_{day}"
+        if total_cycles > 1
+        else f"{dataset}_{day}"
+    )
+
+    work_dir = os.path.join(work_root, run_name)
+    model_path = os.path.join(work_dir, "final.pth")
+    prediction_dir = os.path.join(
+        prediction_root,
+        f"cycle{cycle}_of_{total_cycles}_{day}",
+    )
+    next_list_path = os.path.join(work_dir, "list.csv")
+
+    last_model_arg = f" --last_model {_quote(last_model)}" if last_model else ""
+
     train_command = (
-        f"python train.py --dataset {dataset} "
-        f"--batch_size {batch_size} --max_epochs {max_epochs} "
-        f"--work_dir {work_dir} --length {length} --base_lr {lr}"
+        f"python train.py --config {_quote(config_path)} "
+        f"--work_dir {_quote(work_dir)} "
+        f"--list_dir {_quote(train_list_path)}"
         f"{last_model_arg}"
     )
 
-    # Determine test dataset
-    test_dataset = dataset.replace('train', 'test') if cycle == total_cycles else dataset
-    save_path = f'dataset/{test_dataset}/Prediction_cycle{cycle}_total_{total_cycles}x_{total_epochs}e_{day}/' \
-        if total_cycles > 1 else f'dataset/{dataset}/Prediction_{day}/'
-    label_folder = save_path
+    inference_list_path = test_list_path if cycle == total_cycles else train_list_path
+
     test_command = (
-        f"python test.py --dataset {test_dataset} "
-        f"--model_path {model_path} --save_path {save_path} --length {length}"
+        f"python test.py --config {_quote(config_path)} "
+        f"--model_path {_quote(model_path)} "
+        f"--save_path {_quote(prediction_dir)} "
+        f"--list_dir {_quote(inference_list_path)}"
     )
 
-    # CSV command only if not the last cycle
     if cycle < total_cycles:
         csv_command = (
-            f"python generate_dataset_csv.py --image_folder {image_folder} "
-            f"--label_folder {label_folder} --new_file_path {new_file_path}"
+            f"python generate_dataset_csv.py "
+            f"--image_folder {_quote(image_folder)} "
+            f"--label_folder {_quote(prediction_dir)} "
+            f"--new_file_path {_quote(next_list_path)}"
         )
     else:
         csv_command = None
 
-    return [train_command, test_command, csv_command], new_file_path, model_path
+    return [train_command, test_command, csv_command], next_list_path, model_path
 
 
-def generate_psd_commands(total_cycles=2, total_epochs=100, dataset='Shanghai-train',
-                          batch_size=1, length=5, lr=0.01, foot_dir='commands'):
+def generate_psd_commands(
+    total_cycles=2,
+    dataset=TRAIN_DATASET,
+    config_path=None,
+    train_list_path=None,
+    test_list_path=None,
+    image_folder=None,
+    work_root=None,
+    prediction_root=None,
+    command_root=None,
+):
     """
-    Generate all commands for PSD strategy.
-    Each cycle (after the first) uses the previous cycle's last model as --last_model.
+    Generate all PSD commands and save them as Linux shell and Windows batch files.
+
+    The first cycle trains from ``train_list_path``. Later cycles use the CSV
+    generated from the previous cycle's predictions. The final inference command
+    runs on ``Shanghai-center-test`` through ``test_list_path``.
     """
-    day = datetime.datetime.now().strftime('%Y-%m-%d')
+    _validate_dataset(dataset)
+
+    if total_cycles < 1:
+        raise ValueError("total_cycles must be >= 1")
+
+    if command_root is None:
+        raise ValueError("command_root is required.")
+
+    day = datetime.datetime.now().strftime("%Y-%m-%d")
     command_list = []
-    each_cycle_epoch = total_epochs // total_cycles
 
-    # Linux shell script
-    sh_file = os.path.join(foot_dir, f'{dataset}_PSD_{day}.sh')
-    # Windows bat file
-    bat_file = sh_file.replace('.sh', '.bat')
-    create_folder_if_not_exists(sh_file)
+    txt_file = os.path.join(command_root, f"{dataset}_PSD_{day}.txt")
+    bat_file = os.path.join(command_root, f"{dataset}_PSD_{day}.bat")
+    create_folder_if_not_exists(txt_file)
 
+    current_train_list = train_list_path
     last_model_path = None
-    last_list_path = None
 
     for cycle in range(1, total_cycles + 1):
-        commands, last_list_path, last_model_path = generate_commands(
+        commands, current_train_list, last_model_path = generate_commands(
             cycle=cycle,
             total_cycles=total_cycles,
             dataset=dataset,
-            batch_size=batch_size,
-            max_epochs=each_cycle_epoch,
-            length=length,
-            lr=lr,
-            total_epochs=total_epochs,
-            last_model=last_model_path  # pass previous model to next cycle
+            config_path=config_path,
+            train_list_path=current_train_list,
+            test_list_path=test_list_path,
+            image_folder=image_folder,
+            work_root=work_root,
+            prediction_root=prediction_root,
+            last_model=last_model_path,
         )
-        command_list.extend(commands)
+        command_list.extend(cmd for cmd in commands if cmd)
 
-    # Write Linux .sh file
-    with open(sh_file, 'w') as f:
-        f.write('#!/bin/bash\n\n')
-        for cmd in command_list:
-            if isinstance(cmd, str):
-                f.write(cmd + '\n')
+    with open(txt_file, "w", encoding="utf-8") as f:
+        f.write("\n".join(command_list))
+        f.write("\n")
 
-    # Write Windows .bat file
-    with open(bat_file, 'w') as f:
-        f.write('@echo off\n')
-        for cmd in command_list:
-            if isinstance(cmd, str):
-                f.write(cmd + '\n')
+    with open(bat_file, "w", encoding="utf-8") as f:
+        f.write("@echo off\n")
+        f.write("\n".join(command_list))
+        f.write("\n")
 
-    print(f"Run commands in Windows: {bat_file}")
-    print(f"Run commands in Linux: {sh_file}")
+    print(f"Windows commands: {bat_file}")
+    print(f"Linux commands: {txt_file}")
     return command_list
 
 
-if __name__ == '__main__':
-    commands = generate_psd_commands(
-        total_cycles=2,
-        total_epochs=100,
-        dataset='Shanghai-center-train',
-        batch_size=8,
-        length=5,
-        lr=0.01
+if __name__ == "__main__":
+    raise SystemExit(
+        "Import this module and call generate_psd_commands(...) with explicit "
+        "paths for config_path, train_list_path, test_list_path, image_folder, "
+        "work_root, prediction_root, and command_root."
     )

@@ -3,9 +3,9 @@ import os
 import pandas as pd
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--image_folder', type=str, default='dataset/Shanghai-center-train/image_tiles', help="Path to the folder containing images")
-parser.add_argument('--label_folder', type=str, default='dataset/Shanghai-center-train/label_tiles', help="Path to the folder containing labels (optional, can be None)")
-parser.add_argument('--new_file_path', type=str, default='dataset/CSV_list/Shanghai-center-train.csv', help="Path where the output CSV file will be saved")
+parser.add_argument('--image_folder', type=str, required=True, help="Path to the folder containing images")
+parser.add_argument('--label_folder', type=str, default='', help="Path to the folder containing labels (optional, can be None)")
+parser.add_argument('--new_file_path', type=str, required=True, help="Path where the output CSV file will be saved")
 args = parser.parse_args()
 
 

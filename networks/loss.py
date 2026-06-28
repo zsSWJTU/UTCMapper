@@ -1,31 +1,21 @@
 """
 CCG Loss: Consistent and Confident Guidance Loss
 
-The loss separates pixels into:
-    - Consistent regions: predicted labels align with coarse supervision → Dice loss
-    - Inconsistent regions: predicted labels conflict with coarse labels → BootLoss (self-supervised)
-
-Key components:
-    1. BinaryDiceLoss: Measures overlap for consistent regions.
-    2. BootLoss: Encourages confident predictions for uncertain regions.
-    3. CCGLoss: Combines both losses using confidence-guided masking.
-
-Author: Shuang Zhang
-License: MIT
+Updated version:
+- Consistent region uses Dice loss
+- Inconsistent region uses BootLoss
+- Cleaner masking logic
 """
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
 
 # =========================================================
-# 1. Dice Loss (for consistent regions)
+# 1. Dice Loss
 # =========================================================
 class BinaryDiceLoss(nn.Module):
-    """
-    Dice loss for remaining set (R)
-    Applies to pixels where coarse label is considered reliable.
-    """
     def __init__(self, smooth=1, p=2, reduction='mean'):
         super().__init__()
         self.smooth = smooth
@@ -52,83 +42,289 @@ class BinaryDiceLoss(nn.Module):
 
 
 # =========================================================
-# 2. Boot Loss (for inconsistent regions)
+# 2. Boot Loss
 # =========================================================
 class BootLoss(nn.Module):
-    """
-    BootLoss for filtered set (F)
-    Applies to pixels where coarse label may contain errors.
-    Encourages the model to maintain high confidence in predictions
-    and reduces impact of potentially incorrect coarse labels.
-    """
-    def __init__(self, reduce=True, as_pseudo_label=True, ignore_index=-1):
+    def __init__(
+        self,
+        reduce=True,
+        as_pseudo_label=True,
+        ignore_index=255,
+    ):
         super().__init__()
+
         self.reduce = reduce
         self.as_pseudo_label = as_pseudo_label
         self.ignore_index = ignore_index
 
-    def forward(self, y_pred, y):
-        mask = (y != self.ignore_index).float() if self.ignore_index is not None else torch.ones_like(y)
-        y_pred_a = y_pred.detach() if self.as_pseudo_label else y_pred
-        boot_loss = -torch.sum(F.softmax(y_pred_a, dim=1) * F.log_softmax(y_pred, dim=1), dim=1) * mask
-        return boot_loss.mean() if self.reduce else boot_loss
+    def forward(
+        self,
+        y_pred,
+        y,
+    ):
+        """
+        y_pred: [B, C, H, W]
+        y     : [B, H, W]
 
+        Note:
+            BootLoss itself does not use y as class index.
+            y is only used to decide which pixels are valid.
+        """
+
+        if y.ndim == 4 and y.shape[1] == 1:
+            y = y[:, 0, :, :]
+
+        valid_mask = (
+            y != self.ignore_index
+            if self.ignore_index is not None
+            else torch.ones_like(y, dtype=torch.bool)
+        )
+
+        if valid_mask.sum() == 0:
+            return y_pred.sum() * 0.0
+
+        y_pred_a = (
+            y_pred.detach()
+            if self.as_pseudo_label
+            else y_pred
+        )
+
+        boot_loss = -torch.sum(
+            F.softmax(y_pred_a, dim=1)
+            * F.log_softmax(y_pred, dim=1),
+            dim=1,
+        )
+
+        if self.reduce:
+            return boot_loss[valid_mask].mean()
+
+        out = torch.zeros_like(
+            boot_loss
+        )
+        out[valid_mask] = boot_loss[valid_mask]
+
+        return out
 
 # =========================================================
-# 3. CCGLoss (main loss for UTCMapper)
+# 3. CCGLoss
 # =========================================================
 class CCGLoss(nn.Module):
-    """
-    CCGLoss implements Conflict and Confidence-Guided loss :
-    1. Compute pixel-wise confidence
-    2. Identify potential error pixels: conflicting & confident → filtered set F
-    3. Partition remaining pixels → remaining set R
-    4. Apply Dice loss to R (supervised) and BootLoss to F (self-supervised)
-    """
-    def __init__(self, alpha=1):
+    def __init__(
+        self,
+        alpha=1.0,
+        ignore_index=255,
+    ):
         super().__init__()
+
+        self.ignore_index = ignore_index
+
         self.dice = BinaryDiceLoss()
-        self.boot = BootLoss()
+        self.boot = BootLoss(
+            ignore_index=ignore_index,
+        )
         self.alpha = alpha
 
+    # -----------------------------
+    # confidence
+    # -----------------------------
     def calculate_confidence(self, outputs):
-        """
-        Pixel-wise confidence: difference between top two softmax probabilities.
-        """
         probs = torch.softmax(outputs, dim=1)
         top2, _ = torch.topk(probs, k=2, dim=1)
+
         return (top2[:, 0] - top2[:, 1]) / (top2[:, 0] + top2[:, 1] + 1e-8)
 
-    def find_inconsistent_mask(self, outputs, target):
-        """
-        Identify pixels where prediction disagrees with target but confidence is high.
-        """
-        confidence = self.calculate_confidence(outputs)
-        pred_labels = torch.argmax(outputs, dim=1)
-        mismatch = (pred_labels != target)
-        threshold = torch.mean(confidence).item()
-        inconsistent_mask = mismatch & (confidence > threshold)
+    # -----------------------------
+    # inconsistent mask
+    # -----------------------------
+    def find_inconsistent_mask(
+            self,
+            outputs,
+            target,
+    ):
+
+        confidence = self.calculate_confidence(
+            outputs
+        )
+
+        pred_labels = torch.argmax(
+            outputs,
+            dim=1,
+        )
+
+        valid_mask = target != self.ignore_index
+
+        mismatch = (
+                (pred_labels != target)
+                & valid_mask
+        )
+
+        if mismatch.sum() == 0:
+            return mismatch
+
+        threshold = confidence[mismatch].mean()
+
+        inconsistent_mask = (
+                mismatch
+                & (confidence > threshold)
+                & valid_mask
+        )
+
         return inconsistent_mask
 
-    def forward(self, outputs, target):
-        # generate masks
+    # -----------------------------
+    # forward
+    # -----------------------------
+    def forward(
+            self,
+            outputs,
+            target,
+    ):
+
+        """
+        outputs: [B, C, H, W]
+        target : [B, H, W]
+                 valid classes: 0 ~ C-1
+                 ignore_index : self.ignore_index, usually 255
+        """
+
+        if target.ndim == 4 and target.shape[1] == 1:
+            target = target[:, 0, :, :]
+
+        target = target.long()
+
+        num_classes = outputs.shape[1]
+
+        valid_mask = target != self.ignore_index
+
+        # -----------------------------------------------------
+        # If all pixels are ignored, return zero loss safely
+        # -----------------------------------------------------
+        if valid_mask.sum() == 0:
+            zero_loss = outputs.sum() * 0.0
+
+            return {
+                "consistent_loss": zero_loss,
+                "inconsistent_loss": zero_loss,
+            }
+
+        # -----------------------------------------------------
+        # safe_target is only used for one_hot / indexing.
+        # Ignore pixels are temporarily set to 0 to avoid
+        # out-of-bound errors.
+        # -----------------------------------------------------
+        safe_target = target.clone()
+        safe_target[~valid_mask] = 0
+
+        # Optional safety check
+        invalid_mask = (
+                valid_mask
+                & (
+                        (safe_target < 0)
+                        | (safe_target >= num_classes)
+                )
+        )
+
+        if invalid_mask.any():
+            bad_values = torch.unique(
+                target[invalid_mask].detach().cpu()
+            )
+
+            raise RuntimeError(
+                f"Invalid target values detected in CCGLoss: "
+                f"{bad_values.tolist()} | "
+                f"Allowed: 0~{num_classes - 1}, "
+                f"ignore_index={self.ignore_index}"
+            )
+
+        # =========================
+        # mask generation
+        # =========================
         with torch.no_grad():
-            mask_inconsistent = self.find_inconsistent_mask(outputs, target)
-            mask_inconsistent_2c = mask_inconsistent.unsqueeze(1).repeat(1, outputs.shape[1], 1, 1)
-            mask_consistent_2c = ~mask_inconsistent_2c
 
-        # one-hot encoding
-        one_hot_target = F.one_hot(target, num_classes=outputs.shape[1]).float().permute(0, 3, 1, 2)
+            mask_inconsistent = self.find_inconsistent_mask(
+                outputs,
+                target,
+            )
 
-        # consistent region Dice loss
-        consistent_loss = self.dice(mask_consistent_2c * outputs, mask_consistent_2c * one_hot_target)
+            mask_consistent = (
+                    (~mask_inconsistent)
+                    & valid_mask
+            )
 
-        # inconsistent region BootLoss
+        # =========================
+        # 1. Consistent loss
+        # =========================
+
+        probs = torch.softmax(
+            outputs,
+            dim=1,
+        )
+
+        one_hot_target = F.one_hot(
+            safe_target,
+            num_classes=num_classes,
+        ).float().permute(
+            0,
+            3,
+            1,
+            2,
+        )
+
+        mask_consistent_2c = mask_consistent.unsqueeze(1).expand(
+            -1,
+            num_classes,
+            -1,
+            -1,
+        ).float()
+
+        if mask_consistent.sum() == 0:
+            consistent_loss = outputs.sum() * 0.0
+        else:
+            consistent_loss = self.dice(
+                probs * mask_consistent_2c,
+                one_hot_target * mask_consistent_2c,
+            )
+
+        # =========================
+        # 2. Inconsistent loss
+        # =========================
         target_inconsistent = target.clone()
-        target_inconsistent[~mask_inconsistent] = -1
-        inconsistent_loss = self.boot(outputs, target_inconsistent)
 
+        # Ignore consistent pixels and original ignore pixels
+        target_inconsistent[~mask_inconsistent] = self.ignore_index
+
+        if mask_inconsistent.sum() == 0:
+            inconsistent_loss = outputs.sum() * 0.0
+        else:
+            inconsistent_loss = self.boot(
+                outputs,
+                target_inconsistent,
+            )
+
+        # =========================
+        # output
+        # =========================
         return {
-            'consistent_loss': consistent_loss,
-            'inconsistent_loss': self.alpha * inconsistent_loss
+            "consistent_loss": consistent_loss,
+            "inconsistent_loss": self.alpha * inconsistent_loss,
         }
+
+
+# =========================================================
+# 4. Test
+# =========================================================
+if __name__ == "__main__":
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+
+    B, C, H, W = 2, 2, 256, 256
+
+    outputs = torch.randn(B, C, H, W).to(device)
+    target = torch.randint(0, C, (B, H, W)).to(device)
+
+    # ---- Dice mode ----
+    loss_fn_dice = CCGLoss(alpha=0.5).to(device)
+    loss_dice = loss_fn_dice(outputs, target)
+
+    print("Dice mode:")
+    print(loss_dice)
+

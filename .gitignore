@@ -1,0 +1,36 @@
+# Python bytecode and local caches
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# IDE and OS metadata
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+# Training outputs
+work_dirs/
+commands/
+predictions/
+runs/
+log/
+*.pth
+*.pt
+*.ckpt
+
+# Dataset/cache artifacts
+dataset/cache/
+*.dat
+*.npy
+*.npz
+
+# Logs and temporary files
+*.log
+*.tmp
+*.bak

@@ -1,6 +1,10 @@
 """
 MESNet: Multi-scale Edge-aware Saliency Network
 
+Deprecated:
+    This legacy implementation is no longer used by the release training and
+    inference pipeline. Use networks/MESNet_UltraFast.py instead.
+
 This file implements the core architecture of MESNet for fine-grained
 urban tree canopy (UTC) segmentation.
 
@@ -13,6 +17,22 @@ stacked MES blocks, each integrating:
 Author: Shuang Zhang
 License: MIT
 """
+
+import warnings
+
+DEPRECATION_MESSAGE = (
+    "networks/MESNet.py is deprecated and is not used by the current release. "
+    "Please use networks/MESNet_UltraFast.py for training and inference."
+)
+
+if __name__ == "__main__":
+    print(f"Warning: {DEPRECATION_MESSAGE}")
+else:
+    warnings.warn(
+        DEPRECATION_MESSAGE,
+        UserWarning,
+        stacklevel=2,
+    )
 
 import torch
 import torch.nn as nn
@@ -348,6 +368,7 @@ def freeze_layers(model, keywords):
             print(f"[Frozen] {name}")
 
 if __name__ == '__main__':
+    print(f"Warning: {DEPRECATION_MESSAGE}")
     net = MESNet(64, image_band=3)
     for name, param in net.named_parameters():
         print(f"{name}: {param.shape}")

@@ -1,165 +1,154 @@
+# -*- coding: utf-8 -*-
 """
-Utility functions and configurations for UTCMapper.
+Shared utilities for UTCMapper training and inference.
 
-Includes:
-- Dataset configuration
-- Label mapping
-- Loss tracking
-- Checkpoint loading (exclude head)
+This module intentionally avoids project-specific filesystem paths. Dataset
+entries only declare public dataset names and class counts; CSV paths should be
+provided through the YAML config or command-line arguments.
 """
 
 import csv
 import os
-from collections import defaultdict
 
 import numpy as np
 import torch
 
 
-# =========================
+# =========================================================
 # Image normalization
-# =========================
+# =========================================================
+
+# Default RGB statistics used by the release configuration. Override them in
+# configs/default.yaml when training on a different image distribution.
 IMAGE_MEANS = np.array([101.16, 103.08, 87.93])
 IMAGE_STDS = np.array([63.32, 56.17, 53.20])
 
+DATASET_IMAGE_STATS = {
+    "Shanghai-center-train": {
+        "IMAGE_MEANS": IMAGE_MEANS,
+        "IMAGE_STDS": IMAGE_STDS,
+    },
+    "Shanghai-center-test": {
+        "IMAGE_MEANS": IMAGE_MEANS,
+        "IMAGE_STDS": IMAGE_STDS,
+    },
+}
 
-# =========================
-# Label definition
-# =========================
-LABEL_CLASSES = [0, 2]
 
+# =========================================================
+# Dataset registry
+# =========================================================
+
+# Keep this registry path-free for open-source release. The training and
+# inference scripts can still resolve num_classes from the dataset name, while
+# users pass list_dir explicitly in the config or CLI.
+dataset_config = {
+    "Shanghai-center-train": {
+        "num_classes": 2,
+    },
+    "Shanghai-center-test": {
+        "num_classes": 2,
+    },
+}
+
+
+# =========================================================
+# Loss tracking
+# =========================================================
+
+class LossTrackerV1:
+    """Accumulate per-epoch loss values and append their averages to CSV."""
+
+    def __init__(self, snapshot_path, suffix=""):
+        self.loss_sums = {}
+        self.counts = {}
+        self.file_path = os.path.join(snapshot_path, f"losses_{suffix}.csv")
+
+        if not os.path.exists(self.file_path):
+            with open(self.file_path, "w", newline="") as f:
+                csv.writer(f).writerow(
+                    ["epoch", "consistent_loss", "inconsistent_loss"]
+                )
+
+    def update(self, *loss_dicts):
+        """Add one or more loss dictionaries from a training step."""
+        for loss_dict in loss_dicts:
+            if loss_dict is None:
+                continue
+
+            for key, value in loss_dict.items():
+                if isinstance(value, torch.Tensor):
+                    value = value.item()
+
+                if np.isnan(value):
+                    continue
+
+                self.loss_sums[key] = self.loss_sums.get(key, 0.0) + value
+                self.counts[key] = self.counts.get(key, 0) + 1
+
+    def print_and_save_losses(self, epoch):
+        """Print averaged losses and write one CSV row for the epoch."""
+        avg = {
+            key: self.loss_sums[key] / self.counts[key]
+            for key in self.loss_sums
+            if self.counts[key] > 0
+        }
+
+        print("Loss:", avg)
+
+        with open(self.file_path, "a", newline="") as f:
+            csv.writer(f).writerow([epoch] + list(avg.values()))
+
+        self.loss_sums.clear()
+        self.counts.clear()
+
+
+# =========================================================
+# Loss helpers
+# =========================================================
+
+def sum_losses(loss_dict):
+    """Sum tensor losses while ignoring missing dictionaries and NaNs."""
+    if loss_dict is None:
+        return 0.0
+
+    total = 0.0
+
+    for value in loss_dict.values():
+        if isinstance(value, torch.Tensor) and not torch.isnan(value):
+            total += value
+
+    return total
+
+
+def weight_loss_dict(loss_dict, weights):
+    """Apply scalar weights to a loss dictionary in insertion order."""
+    if len(loss_dict) != len(weights):
+        raise ValueError(
+            f"loss/weight length mismatch: {len(loss_dict)} losses, "
+            f"{len(weights)} weights"
+        )
+
+    return {
+        key: value * weight
+        for (key, value), weight in zip(loss_dict.items(), weights)
+    }
+
+
+# =========================================================
+# Prediction colormap
+# =========================================================
+
+# Binary output classes:
+#   0 = background
+#   1 = foreground urban tree canopy
+LABEL_CLASSES = [0, 1]
 LABEL_CLASS_COLORMAP = {
-    0: (0, 0, 0),
-    2: (153, 255, 204)
+    0: (231, 230, 230),
+    1: (51, 160, 44),
 }
 
 LABEL_IDX_COLORMAP = {
     idx: LABEL_CLASS_COLORMAP[c]
     for idx, c in enumerate(LABEL_CLASSES)
 }
-
-
-def get_label_class_to_idx_map():
-    """Map raw label values to continuous indices."""
-    label_to_idx_map = []
-    idx = 0
-    for i in range(LABEL_CLASSES[-1] + 1):
-        if i in LABEL_CLASSES:
-            label_to_idx_map.append(idx)
-            idx += 1
-        else:
-            label_to_idx_map.append(0)
-    return np.array(label_to_idx_map).astype(np.int64)
-
-
-LABEL_CLASS_TO_IDX_MAP = get_label_class_to_idx_map()
-
-
-# =========================
-# Dataset configuration
-# =========================
-dataset_config = {
-    'Shanghai-center-train': {
-        'list_dir': 'dataset/CSV_list/Shanghai-center-train.csv',
-        'image_dir': 'dataset/Shanghai-center-train/image_tiles',
-        'num_classes': 2
-    },
-    'Shanghai-center-test': {
-        'list_dir': 'dataset/CSV_list/Shanghai-center-test.csv',
-        'image_dir': 'dataset/Shanghai-center-train/image_tiles',
-        'num_classes': 2
-    },
-}
-
-
-# =========================
-# Loss tracker
-# =========================
-class LossTracker:
-    """Track, print, and save averaged losses per epoch."""
-
-    def __init__(self, snapshot_path):
-        self.loss_sums = {}
-        self.counts = {}
-        self.file_path = os.path.join(snapshot_path, 'losses.csv')
-        self.epoch_losses = []
-
-        # Initialize CSV file with header
-        if not os.path.exists(self.file_path):
-            with open(self.file_path, 'w', newline='') as file:
-                writer = csv.writer(file)
-                writer.writerow(['epoch', 'consistent_loss', 'inconsistent_loss'])
-
-    def update(self, *loss_dicts):
-        """Accumulate losses from multiple dicts."""
-        for loss_dict in loss_dicts:
-            if loss_dict is None:
-                continue
-            for key, value in loss_dict.items():
-                if isinstance(value, torch.Tensor):
-                    if torch.isnan(value):
-                        continue
-                    value = value.item()
-                if np.isnan(value):
-                    continue
-
-                self.loss_sums[key] = self.loss_sums.get(key, 0) + value
-                self.counts[key] = self.counts.get(key, 0) + 1
-
-    def print_and_save_losses(self, epoch):
-        """Compute average losses, print, and append to CSV."""
-        avg_losses = {
-            k: self.loss_sums[k] / self.counts[k]
-            for k in self.loss_sums
-        }
-
-        loss_str = ', '.join(f"{k}: {v:.4f}" for k, v in avg_losses.items())
-        print(f"Epoch {epoch}: {loss_str}")
-
-        row = [epoch] + [avg_losses.get(k, 0) for k in self.loss_sums]
-        self.epoch_losses.append(row)
-
-        with open(self.file_path, 'a', newline='') as file:
-            csv.writer(file).writerow(row)
-
-        # Reset after each epoch
-        self.loss_sums.clear()
-        self.counts.clear()
-
-
-# =========================
-# Loss utils
-# =========================
-def sum_losses(loss_dict):
-    """Sum all valid tensor losses in a dict."""
-    total_loss = 0.0
-    if loss_dict is None:
-        return total_loss
-
-    for loss in loss_dict.values():
-        if isinstance(loss, torch.Tensor) and not torch.isnan(loss):
-            total_loss += loss
-        else:
-            print('Invalid loss value detected.')
-
-    return total_loss
-
-
-# =========================
-# Checkpoint loading
-# =========================
-def load_pretrained_exclude_head(model, path):
-    """Load checkpoint while excluding layers containing 'head'."""
-    ckpt = torch.load(path, map_location='cpu')
-
-    if isinstance(ckpt, dict) and 'state_dict' in ckpt:
-        ckpt = ckpt['state_dict']
-
-    # Remove DataParallel prefix
-    ckpt = {k.replace('module.', ''): v for k, v in ckpt.items()}
-
-    # Exclude head layers
-    ckpt = {k: v for k, v in ckpt.items() if 'head' not in k}
-
-    model.load_state_dict(ckpt, strict=False)
-    return model
