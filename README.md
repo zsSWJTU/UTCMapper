@@ -31,7 +31,6 @@ Very-high-resolution imagery
 | Network | The active training and inference path uses `networks/MESNet_UltraFast.py`; `networks/MESNet.py` is kept as a legacy reference. |
 | Labels | Single-band binary setup: background = `0`, foreground UTC = `1`, ignored pixels = `255`; raw values in `label.positive_values` are mapped to foreground. |
 | Paths | Dataset paths are no longer hard-coded in `utils.py` or the PSD command generator. Provide CSV paths and output folders through YAML or CLI arguments. |
-| Release datasets | Only `Shanghai-center-train` and `Shanghai-center-test` are registered by default. |
 
 > Speed note: the core MESNet idea is preserved, but the release pipeline uses
 > a more efficient implementation for practical large-area training.
