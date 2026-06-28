@@ -6,8 +6,8 @@
 ![License](https://img.shields.io/badge/License-MIT-lightgrey)
 ![Last Updated](https://img.shields.io/badge/Updated-2026--06--28-blue)
 
-UTCMapper is a deep-learning workflow for fine-resolution urban tree canopy
-(UTC) mapping from very-high-resolution imagery. This release uses the
+UTCMapper is a deep-learning workflow for very-fine-resolution urban tree canopy
+(UTC) mapping based on coarse labels. This release uses the
 accelerated `MESNet_UltraFast` implementation for training and inference.
 
 ```text
