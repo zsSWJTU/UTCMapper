@@ -216,12 +216,12 @@ If you use this work, please cite:
 
 ```bibtex
 @article{zhang2026utcmapper,
-  title={UTCMapper for 0.3 m urban tree canopy mapping: A case study in Shanghai},
-  author={Zhang, Shuang and Wang, Qian and Yang, Qian and Tong, Xiaohua and Atkinson, Peter M.},
-  journal={Remote Sensing of Environment},
-  volume={340},
-  pages={115435},
-  year={2026},
-  doi={10.1016/j.rse.2026.115435}
+  title   = {{UTCMapper} for 0.3 m urban tree canopy mapping: A case study in Shanghai},
+  author  = {Zhang, Shuang and Wang, Qunming and Yang, Qiquan and Tong, Xiaohua and Atkinson, Peter M.},
+  journal = {Remote Sensing of Environment},
+  volume  = {340},
+  pages   = {115435},
+  year    = {2026},
+  doi     = {10.1016/j.rse.2026.115435}
 }
 ```
