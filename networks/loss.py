@@ -113,6 +113,8 @@ class CCGLoss(nn.Module):
         self,
         alpha=1.0,
         ignore_index=255,
+        fn_quantile=0.5,
+        fp_quantile=0.5,
     ):
         super().__init__()
 
@@ -123,6 +125,15 @@ class CCGLoss(nn.Module):
             ignore_index=ignore_index,
         )
         self.alpha = alpha
+        self.fn_quantile = self._validate_quantile("fn_quantile", fn_quantile)
+        self.fp_quantile = self._validate_quantile("fp_quantile", fp_quantile)
+
+    @staticmethod
+    def _validate_quantile(name, value):
+        value = float(value)
+        if not 0.0 <= value <= 1.0:
+            raise ValueError(f"{name} must be in [0, 1], got {value}.")
+        return value
 
     # -----------------------------
     # confidence
@@ -153,23 +164,29 @@ class CCGLoss(nn.Module):
 
         valid_mask = target != self.ignore_index
 
-        mismatch = (
-                (pred_labels != target)
-                & valid_mask
+        if outputs.shape[1] != 2:
+            raise ValueError(
+                "FN/FP-specific CCG selection requires exactly two classes, "
+                f"got {outputs.shape[1]}."
+            )
+
+        false_negative = valid_mask & (target == 1) & (pred_labels == 0)
+        false_positive = valid_mask & (target == 0) & (pred_labels == 1)
+
+        def select(error_mask, quantile):
+            values = confidence[error_mask]
+            if values.numel() == 0:
+                return error_mask
+            threshold = torch.quantile(values.detach().float(), quantile)
+            return error_mask & (confidence >= threshold)
+
+        # FN and FP often represent different annotation errors. Selecting
+        # them within their own confidence distributions prevents a dominant
+        # error type from setting the threshold for the other one.
+        return (
+            select(false_negative, self.fn_quantile)
+            | select(false_positive, self.fp_quantile)
         )
-
-        if mismatch.sum() == 0:
-            return mismatch
-
-        threshold = confidence[mismatch].mean()
-
-        inconsistent_mask = (
-                mismatch
-                & (confidence > threshold)
-                & valid_mask
-        )
-
-        return inconsistent_mask
 
     # -----------------------------
     # forward

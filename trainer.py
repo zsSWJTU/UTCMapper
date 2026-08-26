@@ -918,8 +918,10 @@ def trainer_dataset(args, model, snapshot_path):
         )
 
     criterion = CCGLoss(
-        alpha=1.0,
+        alpha=get_nested_arg(args, "loss", "alpha", 1.0),
         ignore_index=ignore_value,
+        fn_quantile=get_nested_arg(args, "loss", "fn_quantile", 0.5),
+        fp_quantile=get_nested_arg(args, "loss", "fp_quantile", 0.5),
     )
 
 

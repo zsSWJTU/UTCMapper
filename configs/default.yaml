@@ -99,4 +99,10 @@ runtime:
 # =====================================================
 loss:
   weights: [1,1]
+  alpha: 1.0
+  # Select FN and FP independently inside their confidence distributions.
+  # Lower values admit more errors to BootLoss; higher values keep only the
+  # most confident errors. Missing foreground annotations appear as FP.
+  fn_quantile: 0.5
+  fp_quantile: 0.5
 

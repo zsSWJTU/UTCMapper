@@ -15,6 +15,12 @@ TRAIN_DATASET = "Shanghai-center-train"
 TEST_DATASET = "Shanghai-center-test"
 ALLOWED_DATASETS = {TRAIN_DATASET, TEST_DATASET}
 
+# Default preserves the original release behavior. Set this to
+# "union_original" (or pass label_mode explicitly) when coarse annotations
+# have high precision but incomplete foreground coverage.
+PSD_LABEL_MODE = "pseudo_only"
+ORIGINAL_POSITIVE_VALUES = (2,)
+
 
 def create_folder_if_not_exists(path):
     """Create the parent folder for an output command file."""
@@ -48,6 +54,9 @@ def generate_commands(
     work_root=None,
     prediction_root=None,
     last_model=None,
+    label_mode=PSD_LABEL_MODE,
+    original_train_list=None,
+    original_positive_values=ORIGINAL_POSITIVE_VALUES,
 ):
     """
     Generate train, inference, and optional CSV-refresh commands for one cycle.
@@ -61,13 +70,19 @@ def generate_commands(
         "config_path": config_path,
         "train_list_path": train_list_path,
         "test_list_path": test_list_path,
-        "image_folder": image_folder,
         "work_root": work_root,
         "prediction_root": prediction_root,
     }
     missing = [name for name, value in required.items() if not value]
     if missing:
         raise ValueError(f"Missing required PSD arguments: {missing}")
+    if label_mode not in {"pseudo_only", "union_original"}:
+        raise ValueError(
+            "label_mode must be 'pseudo_only' or 'union_original', "
+            f"got {label_mode!r}."
+        )
+    if label_mode == "union_original" and not original_train_list:
+        raise ValueError("union_original requires original_train_list.")
 
     day = datetime.datetime.now().strftime("%Y-%m-%d")
     run_name = (
@@ -86,11 +101,13 @@ def generate_commands(
 
     last_model_arg = f" --last_model {_quote(last_model)}" if last_model else ""
 
+    pseudo_label_arg = " --positive_values 1" if cycle > 1 else ""
     train_command = (
         f"python train.py --config {_quote(config_path)} "
         f"--work_dir {_quote(work_dir)} "
         f"--list_dir {_quote(train_list_path)}"
         f"{last_model_arg}"
+        f"{pseudo_label_arg}"
     )
 
     inference_list_path = test_list_path if cycle == total_cycles else train_list_path
@@ -103,11 +120,26 @@ def generate_commands(
     )
 
     if cycle < total_cycles:
+        merged_label_folder = os.path.join(work_dir, "labels_union_original")
+        original_args = ""
+        if label_mode == "union_original":
+            if not original_positive_values:
+                raise ValueError(
+                    "union_original requires original_positive_values."
+                )
+            positive_values = " ".join(str(v) for v in original_positive_values)
+            original_args = (
+                f" --original_list {_quote(original_train_list)}"
+                f" --original_positive_values {positive_values}"
+                f" --merged_label_folder {_quote(merged_label_folder)}"
+            )
         csv_command = (
-            f"python generate_dataset_csv.py "
-            f"--image_folder {_quote(image_folder)} "
-            f"--label_folder {_quote(prediction_dir)} "
-            f"--new_file_path {_quote(next_list_path)}"
+            f"python generate_psd_csv.py "
+            f"--input_list {_quote(train_list_path)} "
+            f"--prediction_folder {_quote(prediction_dir)} "
+            f"--output_list {_quote(next_list_path)} "
+            f"--label_mode {label_mode}"
+            f"{original_args}"
         )
     else:
         csv_command = None
@@ -125,6 +157,8 @@ def generate_psd_commands(
     work_root=None,
     prediction_root=None,
     command_root=None,
+    label_mode=PSD_LABEL_MODE,
+    original_positive_values=ORIGINAL_POSITIVE_VALUES,
 ):
     """
     Generate all PSD commands and save them as Linux shell and Windows batch files.
@@ -149,6 +183,7 @@ def generate_psd_commands(
     create_folder_if_not_exists(txt_file)
 
     current_train_list = train_list_path
+    original_train_list = train_list_path
     last_model_path = None
 
     for cycle in range(1, total_cycles + 1):
@@ -163,6 +198,9 @@ def generate_psd_commands(
             work_root=work_root,
             prediction_root=prediction_root,
             last_model=last_model_path,
+            label_mode=label_mode,
+            original_train_list=original_train_list,
+            original_positive_values=original_positive_values,
         )
         command_list.extend(cmd for cmd in commands if cmd)
 

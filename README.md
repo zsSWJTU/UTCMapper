@@ -46,6 +46,7 @@ Very-high-resolution imagery
 | `cached_dataset.py` | Memmap-backed geospatial chip cache |
 | `generate_dataset_csv.py` | Build image/label CSV lists |
 | `generate_PSD_commands.py` | Parameterized PSD command generator |
+| `generate_psd_csv.py` | Validate predictions and build pseudo-only or original-union PSD labels |
 | `utils.py` | Shared utilities and dataset registry |
 | `networks/MESNet_UltraFast.py` | Active accelerated MESNet implementation |
 | `networks/MESNet.py` | Legacy/reference MESNet implementation |
@@ -199,10 +200,56 @@ generate_psd_commands(
     work_root="/path/to/work_dirs",
     prediction_root="/path/to/predictions",
     command_root="/path/to/commands",
+    label_mode="union_original",
+    original_positive_values=[2],
 )
 ```
 
 This writes both `.txt` and `.bat` command files.
+
+### CCG error-pixel selection
+
+CCG now selects false negatives (FN) and false positives (FP) independently
+inside their own confidence distributions. Configure the retained confidence
+quantiles under `loss`:
+
+```yaml
+loss:
+  alpha: 1.0
+  fn_quantile: 0.5
+  fp_quantile: 0.5
+```
+
+The quantiles are in `[0, 1]`. Lower values send more of that error type to
+BootLoss; higher values retain only the most confident errors. Use a lower
+`fp_quantile` when foreground is often missing from the annotation: a model
+prediction over missing foreground appears as an FP. Use a lower
+`fn_quantile` when foreground is often annotated over true background. Keeping
+the two thresholds separate is especially useful when one annotation-error
+type is much more common than the other.
+
+This selection is binary-only because FN and FP are defined here for
+background `0` and UTC foreground `1`.
+
+### PSD label modes
+
+`generate_psd_commands` supports two label modes:
+
+- `pseudo_only` (default) uses the model prediction as the next-cycle label
+  and preserves the original UTCMapper PSD behavior.
+- `union_original` uses `prediction foreground OR original foreground`. It is
+  appropriate when original annotations are incomplete but their existing
+  foreground pixels are trusted and should not be forgotten by later cycles.
+
+For `union_original`, `original_positive_values` must describe foreground in
+the original raster (for the public configuration, `[2]`). Generated PSD
+labels contain only `0/1`, so the command generator automatically adds
+`--positive_values 1` to every training cycle after the first.
+
+The union utility validates that predictions are binary and that pseudo and
+original rasters have matching shape, transform, and CRS. Do not use union mode
+when original foreground contains many false positives: union cannot remove
+those errors and may propagate them through every PSD cycle.
 
 ## Produced Shanghai UTC Map
 

@@ -283,6 +283,14 @@ def main():
         help="Override last_model / pretrained_model in config.",
     )
 
+    parser.add_argument(
+        "--positive_values",
+        nargs="+",
+        type=int,
+        default=None,
+        help="Override label.positive_values (PSD predictions use value 1).",
+    )
+
     cli_args = parser.parse_args()
 
     # -------------------------------------------------------------------------
@@ -305,6 +313,11 @@ def main():
     if cli_args.last_model is not None:
         args.last_model = cli_args.last_model
         args.pretrained_model = cli_args.last_model
+
+    if cli_args.positive_values is not None:
+        if not hasattr(args, "label") or args.label is None:
+            args.label = SimpleNamespace()
+        args.label.positive_values = list(cli_args.positive_values)
 
     # -------------------------------------------------------------------------
     # Basic defaults
