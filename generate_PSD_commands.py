@@ -15,9 +15,9 @@ TRAIN_DATASET = "Shanghai-center-train"
 TEST_DATASET = "Shanghai-center-test"
 ALLOWED_DATASETS = {TRAIN_DATASET, TEST_DATASET}
 
-# Default preserves the original release behavior. Set this to
-# "union_original" (or pass label_mode explicitly) when coarse annotations
-# have high precision but incomplete foreground coverage.
+# TODO:
+# Use "union_original" when coarse labels
+# suffer from severe foreground omission, e.g., highly incomplete 10 m labels.
 PSD_LABEL_MODE = "pseudo_only"
 ORIGINAL_POSITIVE_VALUES = (2,)
 
