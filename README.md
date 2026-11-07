@@ -11,7 +11,7 @@ UTCMapper is a deep-learning workflow for very-fine-resolution urban tree canopy
 accelerated `MESNet_UltraFast` implementation for training and inference.
 
 ```text
-Very-high-resolution imagery
+Very-fine-resolution imagery
           |
           v
   CSV dataset list  --->  cached geospatial chips
